@@ -11,21 +11,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xx.weather.ui.theme.LocalWeatherPalette
 
-/** Translucent rounded card used for every section, Pixel-Weather-style. */
+/** Themed rounded card used for every section. */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val palette = LocalWeatherPalette.current
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        color = Color.White.copy(alpha = 0.10f)
+        color = palette.surface
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
@@ -37,9 +38,10 @@ fun GlassCard(
 /** Small-caps section label inside a card. */
 @Composable
 fun CardTitle(text: String) {
+    val palette = LocalWeatherPalette.current
     Text(
         text = text.uppercase(),
-        color = Color.White.copy(alpha = 0.75f),
+        color = palette.muted,
         fontSize = 12.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.4.sp

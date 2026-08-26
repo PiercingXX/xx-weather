@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,6 +24,7 @@ import com.xx.weather.R
 import com.xx.weather.data.model.Units
 import com.xx.weather.data.model.WeatherData
 import com.xx.weather.ui.Fmt
+import com.xx.weather.ui.theme.LocalWeatherPalette
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -99,11 +98,12 @@ private data class DetailTileData(
 
 @Composable
 private fun DetailTile(tile: DetailTileData, modifier: Modifier = Modifier) {
+    val palette = LocalWeatherPalette.current
     Column(
         modifier = modifier
             .height(98.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.08f))
+            .background(palette.surface)
             .padding(horizontal = 16.dp, vertical = 13.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -111,7 +111,7 @@ private fun DetailTile(tile: DetailTileData, modifier: Modifier = Modifier) {
                 Icon(
                     painter = painterResource(R.drawable.ic_arrow_up),
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = palette.onSurface.copy(alpha = 0.85f),
                     modifier = Modifier
                         .size(12.dp)
                         .rotate((tile.arrowDeg + 180f))
@@ -120,16 +120,16 @@ private fun DetailTile(tile: DetailTileData, modifier: Modifier = Modifier) {
             }
             Text(
                 text = tile.label.uppercase(),
-                color = Color.White.copy(alpha = 0.70f),
+                color = palette.muted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.1.sp
             )
         }
         Spacer(Modifier.weight(1f))
-        Text(tile.value, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(tile.value, color = palette.onSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         if (tile.sub.isNotEmpty()) {
-            Text(tile.sub, color = Color.White.copy(alpha = 0.60f), fontSize = 11.sp)
+            Text(tile.sub, color = palette.muted.copy(alpha = 0.85f), fontSize = 11.sp)
         }
     }
 }

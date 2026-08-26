@@ -6,14 +6,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -26,42 +31,86 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.xx.weather.R
+import com.xx.weather.data.model.Place
 import com.xx.weather.data.model.Units
+import com.xx.weather.ui.theme.LocalWeatherPalette
 
 /**
- * Single-ZIP configuration + unit toggle. This is the app's only setup step —
- * no location permission, no Google Play Services (GrapheneOS-friendly).
+ * Units + add a ZIP. Saved locations can be removed here or from the list view.
  */
 @Composable
 fun SettingsDialog(
-    currentZip: String?,
+    places: List<Place>,
     currentUnits: Units,
     applying: Boolean,
     error: String?,
     onDismiss: () -> Unit,
-    onApply: (zip: String, units: Units) -> Unit
+    onAdd: (zip: String, units: Units) -> Unit,
+    onUnitsOnly: (units: Units) -> Unit,
+    onRemove: (zip: String) -> Unit
 ) {
-    var zip by remember { mutableStateOf(currentZip ?: "") }
+    var zip by remember { mutableStateOf("") }
     var units by remember { mutableStateOf(currentUnits) }
 
+    val palette = LocalWeatherPalette.current
     Dialog(onDismissRequest = { if (!applying) onDismiss() }) {
         Surface(
             shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF161B24)
+            color = palette.background
         ) {
-            Column(Modifier.padding(24.dp)) {
-                Text("Settings", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Column(
+                Modifier
+                    .padding(24.dp)
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text("Settings", color = palette.onBackground, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(18.dp))
 
+                if (places.isNotEmpty()) {
+                    Text(
+                        "LOCATIONS",
+                        color = palette.muted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    places.forEach { place ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(place.displayName, color = palette.onBackground, fontSize = 15.sp)
+                                Text(place.zip, color = palette.faint, fontSize = 12.sp)
+                            }
+                            IconButton(
+                                onClick = { onRemove(place.zip) },
+                                enabled = !applying
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_close),
+                                    contentDescription = "Remove ${place.displayName}",
+                                    tint = palette.muted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                }
+
                 Text(
-                    "ZIP CODE",
-                    color = Color.White.copy(alpha = 0.65f),
+                    "ADD ZIP CODE",
+                    color = palette.muted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 1.2.sp
@@ -76,7 +125,7 @@ fun SettingsDialog(
                     singleLine = true,
                     enabled = !applying,
                     isError = error != null,
-                    placeholder = { Text("e.g. 80202", color = Color.White.copy(alpha = 0.4f)) },
+                    placeholder = { Text("e.g. 00802", color = palette.faint) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     supportingText = {
                         error?.let {
@@ -88,7 +137,7 @@ fun SettingsDialog(
                 Spacer(Modifier.height(14.dp))
                 Text(
                     "TEMPERATURE",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = palette.muted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 1.2.sp
@@ -116,23 +165,26 @@ fun SettingsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, enabled = !applying) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                        Text("Cancel", color = palette.muted)
                     }
                     Spacer(Modifier.width(6.dp))
+                    val canSave = !applying && (zip.length == 5 || (zip.isEmpty() && units != currentUnits))
                     Button(
-                        onClick = { onApply(zip, units) },
-                        enabled = !applying && zip.length == 5
+                        onClick = {
+                            if (zip.length == 5) onAdd(zip, units) else onUnitsOnly(units)
+                        },
+                        enabled = canSave
                     ) {
                         if (applying) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White
+                                color = palette.onBackground
                             )
                             Spacer(Modifier.width(8.dp))
                             Text("Saving")
                         } else {
-                            Text("Save")
+                            Text(if (zip.length == 5) "Add" else "Save")
                         }
                     }
                 }

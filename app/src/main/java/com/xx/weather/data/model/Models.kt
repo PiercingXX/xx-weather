@@ -32,7 +32,10 @@ data class Place(
     val state: String,
     val lat: Double,
     val lon: Double
-)
+) {
+    val displayName: String
+        get() = if (state.isBlank()) city else "$city, $state"
+}
 
 data class CurrentConditions(
     val tempF: Double,
@@ -119,7 +122,10 @@ data class WeatherData(
     val daily: List<DailyPoint>,
     val sun: SunTimes?,
     val source: String
-)
+) {
+    fun hourlyOn(date: LocalDate): List<HourlyPoint> =
+        hourly.filter { it.time.toLocalDate() == date }
+}
 
 /** Condition mapping helpers for NWS icon tokens, NWS text, and WMO codes. */
 object Conditions {

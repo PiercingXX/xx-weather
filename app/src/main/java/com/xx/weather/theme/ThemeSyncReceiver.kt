@@ -1,0 +1,60 @@
+package com.xx.weather.theme
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import com.xx.weather.data.WeatherRepository
+import com.xx.weather.widget.WidgetUpdater
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/**
+ * Receives XX-Launcher's `xx.launcher.THEME_CHANGED` broadcast, persists the
+ * ground, repaints a live UI, and recolors home-screen widgets.
+ */
+class ThemeSyncReceiver(
+    private val action: String = ACTION_THEME_CHANGED,
+    private val extractAction: (Intent?) -> String? = { intent -> intent?.action },
+    private val extractThemeName: (Intent?) -> String? = { intent ->
+        intent?.getStringExtra(EXTRA_THEME_NAME)
+    },
+    private val extractBackground: (Intent?) -> Long? = { intent ->
+        if (intent != null && intent.hasExtra(EXTRA_BACKGROUND)) {
+            intent.getIntExtra(EXTRA_BACKGROUND, 0).toLong() and 0xFFFFFFFFL
+        } else {
+            null
+        }
+    },
+    private val persistTheme: (Context?, SyncedTheme) -> Unit = { context, theme ->
+        if (context != null) ThemeStore.of(context).save(theme)
+    },
+    private val applyLive: (Context?, SyncedTheme) -> Unit = { context, theme ->
+        ThemeController.onThemeChanged(theme)
+        if (context != null) {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                val data = WeatherRepository(context.applicationContext).loadCached()
+                WidgetUpdater.updateAll(context.applicationContext, data)
+            }
+        }
+    },
+) : BroadcastReceiver() {
+
+    override fun onReceive(context: Context?, intent: Intent?) {
+        if (extractAction(intent) != action) return
+        val theme = resolveSyncedTheme(
+            extractThemeName(intent),
+            extractBackground(intent),
+        ) ?: return
+        persistTheme(context, theme)
+        applyLive(context, theme)
+    }
+
+    companion object {
+        const val ACTION_THEME_CHANGED = "xx.launcher.THEME_CHANGED"
+        const val EXTRA_THEME_NAME = "xx.launcher.extra.THEME_NAME"
+        const val EXTRA_BACKGROUND = "xx.launcher.extra.BACKGROUND"
+        const val PERMISSION_THEME_SYNC = "com.piercingxx.xxlauncher.permission.THEME_SYNC"
+    }
+}

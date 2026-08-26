@@ -25,6 +25,8 @@ Google Play Services, no location permission, no tracking**.
 - Detail tiles: feels-like, humidity/dew point, wind (+compass arrow), UV,
   pressure, visibility, sunrise/sunset, precip chance.
 - °F / °C toggle.
+- Multiple saved ZIP codes; swipe left/right between full forecasts, or
+  toggle the collapsed list and tap a city for detail.
 - Two widgets: **Compact (2×2)** and **Forecast (4×2 with 6-hour strip)**.
   Updates every 30 min (system floor), immediately after in-app refreshes, and
   render instantly from cache.

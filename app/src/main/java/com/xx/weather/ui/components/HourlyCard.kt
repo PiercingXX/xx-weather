@@ -1,6 +1,5 @@
 package com.xx.weather.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,7 +16,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +25,7 @@ import com.xx.weather.data.model.HourlyPoint
 import com.xx.weather.data.model.Units
 import com.xx.weather.data.model.WeatherData
 import com.xx.weather.ui.Fmt
+import com.xx.weather.ui.theme.LocalWeatherPalette
 
 /** Horizontal hourly carousel — time, icon, temp, precip chance. */
 @Composable
@@ -46,10 +45,11 @@ fun HourlyCard(data: WeatherData, units: Units, modifier: Modifier = Modifier) {
 
 @Composable
 private fun HourColumn(index: Int, hour: HourlyPoint, units: Units) {
+    val palette = LocalWeatherPalette.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = if (index == 0) "Now" else Fmt.hourLabel(hour.time),
-            color = Color.White.copy(alpha = 0.80f),
+            color = palette.muted,
             fontSize = 12.sp
         )
         Spacer(Modifier.height(7.dp))
@@ -57,7 +57,7 @@ private fun HourColumn(index: Int, hour: HourlyPoint, units: Units) {
         Spacer(Modifier.height(7.dp))
         Text(
             text = Fmt.temp(hour.tempF, units),
-            color = Color.White,
+            color = palette.onSurface,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -68,11 +68,11 @@ private fun HourColumn(index: Int, hour: HourlyPoint, units: Units) {
                 Icon(
                     painter = painterResource(R.drawable.ic_drop),
                     contentDescription = null,
-                    tint = Color(0xFF8AB4F8),
+                    tint = palette.accent,
                     modifier = Modifier.size(10.dp)
                 )
                 Spacer(Modifier.width(2.dp))
-                Text(text = "$pop%", color = Color(0xFF8AB4F8), fontSize = 11.sp)
+                Text(text = "$pop%", color = palette.accent, fontSize = 11.sp)
             }
         } else {
             Spacer(Modifier.height(14.dp))

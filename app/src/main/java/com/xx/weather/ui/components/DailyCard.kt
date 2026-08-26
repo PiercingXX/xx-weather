@@ -1,6 +1,7 @@
 package com.xx.weather.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,13 +34,20 @@ import com.xx.weather.data.model.DailyPoint
 import com.xx.weather.data.model.Units
 import com.xx.weather.data.model.WeatherData
 import com.xx.weather.ui.Fmt
+import com.xx.weather.ui.theme.LocalWeatherPalette
+import java.time.LocalDate
 
 /**
  * Signature Pixel-style 10-day strip: tall rounded pills, each with the day,
  * condition, precip chance, and a low→high range bar scaled to the week.
  */
 @Composable
-fun DailyCard(data: WeatherData, units: Units, modifier: Modifier = Modifier) {
+fun DailyCard(
+    data: WeatherData,
+    units: Units,
+    modifier: Modifier = Modifier,
+    onDayClick: (LocalDate) -> Unit = {},
+) {
     val days = data.daily.take(10)
     if (days.isEmpty()) return
     val weekMin = days.minOf { it.loF }
@@ -53,7 +61,7 @@ fun DailyCard(data: WeatherData, units: Units, modifier: Modifier = Modifier) {
             contentPadding = PaddingValues(vertical = 2.dp)
         ) {
             itemsIndexed(days) { index, day ->
-                DayPill(index, day, weekMin, span, units)
+                DayPill(index, day, weekMin, span, units, onClick = { onDayClick(day.date) })
             }
         }
     }
@@ -69,20 +77,23 @@ private fun DayPill(
     day: DailyPoint,
     weekMin: Double,
     span: Double,
-    units: Units
+    units: Units,
+    onClick: () -> Unit,
 ) {
+    val palette = LocalWeatherPalette.current
     Column(
         modifier = Modifier
             .width(86.dp)
             .height(206.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.08f))
+            .background(palette.background.copy(alpha = 0.45f))
+            .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = if (index == 0) "Today" else Fmt.dayLabel(day.date),
-            color = Color.White,
+            color = palette.onSurface,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -95,11 +106,11 @@ private fun DayPill(
                 Icon(
                     painter = painterResource(R.drawable.ic_drop),
                     contentDescription = null,
-                    tint = Color(0xFF8AB4F8),
+                    tint = palette.accent,
                     modifier = Modifier.size(10.dp)
                 )
                 Spacer(Modifier.width(2.dp))
-                Text("$pop%", color = Color(0xFF8AB4F8), fontSize = 11.sp)
+                Text("$pop%", color = palette.accent, fontSize = 11.sp)
             }
         } else {
             Text(" ", fontSize = 11.sp)
@@ -119,7 +130,7 @@ private fun DayPill(
                 .width(6.dp)
                 .height(barHeight)
                 .clip(RoundedCornerShape(3.dp))
-                .background(Color.White.copy(alpha = 0.15f))
+                .background(palette.onSurface.copy(alpha = 0.15f))
         ) {
             val segTop = (barHeight * (1.0 - hiFrac).toFloat())
             val segHeight = barHeight * (hiFrac - loFrac).toFloat().coerceAtLeast(0.06f)
@@ -138,11 +149,11 @@ private fun DayPill(
         day.hiF?.let {
             Text(
                 Fmt.temp(it, units),
-                color = Color.White,
+                color = palette.onSurface,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
         }
-        Text(Fmt.temp(day.loF, units), color = Color.White.copy(alpha = 0.70f), fontSize = 14.sp)
+        Text(Fmt.temp(day.loF, units), color = palette.muted, fontSize = 14.sp)
     }
 }

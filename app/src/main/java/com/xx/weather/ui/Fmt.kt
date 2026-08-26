@@ -44,6 +44,9 @@ object Fmt {
     fun dayLabel(date: LocalDate): String =
         date.format(DateTimeFormatter.ofPattern("EEE", Locale.getDefault()))
 
+    fun fullDate(date: LocalDate): String =
+        date.format(DateTimeFormatter.ofPattern("EEEE, MMM d", Locale.getDefault()))
+
     private val DIRS = arrayOf(
         "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
         "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"

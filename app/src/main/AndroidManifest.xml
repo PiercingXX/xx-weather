@@ -4,7 +4,14 @@
     <!-- GrapheneOS-friendly: no location, no GMS. Manual ZIP code entry only. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Family theme-sync. Do NOT <permission>-declare THEME_SYNC: this app
+         is signed with a different key than XX-Launcher, and a second
+         declaration is INSTALL_FAILED_DUPLICATE_PERMISSION. The receiver is
+         still gated by android:permission so only the launcher can send. -->
+    <uses-permission android:name="com.piercingxx.xxlauncher.permission.THEME_SYNC" />
+
     <application
+        android:name=".WeatherApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -45,6 +52,16 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_wide_info" />
+        </receiver>
+
+        <receiver
+            android:name=".theme.ThemeSyncReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="com.piercingxx.xxlauncher.permission.THEME_SYNC">
+            <intent-filter>
+                <action android:name="xx.launcher.THEME_CHANGED" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>

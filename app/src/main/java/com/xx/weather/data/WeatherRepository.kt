@@ -23,6 +23,9 @@ import java.time.LocalDateTime
  *  1. PRIMARY  — NWS api.weather.gov (human-edited NDFD; best US short-range accuracy)
  *  2. ENRICH   — Open-Meteo for UV index / visibility / pressure / dew point / sun times
  *  3. FALLBACK — full standalone Open-Meteo (best_match NOAA blend) if NWS unreachable
+ *
+ * Cache files are prefixed by ZIP so multiple saved locations do not clobber
+ * each other.
  */
 class WeatherRepository(private val context: Context) {
 
@@ -33,51 +36,55 @@ class WeatherRepository(private val context: Context) {
 
     // ---------------------------------------------------------------- cache
 
-    private fun cacheFile(name: String) = File(context.filesDir, name)
+    private fun cacheFile(zip: String, name: String) = File(context.filesDir, "${zip}_$name")
 
-    private fun readCache(name: String): String? = try {
-        cacheFile(name).takeIf { it.exists() }?.readText()
+    private fun migrateLegacyCaches(zip: String) {
+        val dest = cacheFile(zip, NWS_DAILY)
+        val src = File(context.filesDir, NWS_DAILY)
+        if (dest.exists() || !src.exists()) return
+        listOf(NWS_DAILY, NWS_HOURLY, NWS_OBS, OM_BODY, EXTRAS, FETCH_STAMP).forEach { name ->
+            val from = File(context.filesDir, name)
+            if (from.exists()) from.renameTo(cacheFile(zip, name))
+        }
+    }
+
+    private fun readCache(zip: String, name: String): String? = try {
+        cacheFile(zip, name).takeIf { it.exists() }?.readText()
     } catch (_: Exception) {
         null
     }
 
-    private fun writeCache(name: String, body: String) {
-        // Unique tmp name: a stray concurrent writer can never collide on it.
-        val tmp = File(context.filesDir, "$name.${System.nanoTime()}.tmp")
+    private fun writeCache(zip: String, name: String, body: String) {
+        val tmp = File(context.filesDir, "${zip}_$name.${System.nanoTime()}.tmp")
         try {
             tmp.writeText(body)
-            // rename(2) atomically replaces an existing target on Linux/Android.
-            if (!tmp.renameTo(cacheFile(name))) tmp.delete()
+            if (!tmp.renameTo(cacheFile(zip, name))) tmp.delete()
         } catch (_: Exception) {
             tmp.delete()
         }
     }
 
-    private fun deleteCache(name: String) {
+    private fun deleteCache(zip: String, name: String) {
         try {
-            cacheFile(name).delete()
+            cacheFile(zip, name).delete()
         } catch (_: Exception) {
         }
     }
 
-    private fun clearCaches() {
+    private fun clearCaches(zip: String) {
         listOf(NWS_DAILY, NWS_HOURLY, NWS_OBS, OM_BODY, EXTRAS, FETCH_STAMP).forEach {
-            deleteCache(it)
+            deleteCache(zip, it)
         }
     }
 
-    /** Sidecar stamp: epoch ms of the last successful primary/fallback fetch. */
-    private fun writeStamp(fetchedAtEpochMs: Long) {
-        // Same tmp+rename path as writeCache so a reader can never observe a
-        // torn/half-written stamp.
-        writeCache(FETCH_STAMP, fetchedAtEpochMs.toString())
+    private fun writeStamp(zip: String, fetchedAtEpochMs: Long) {
+        writeCache(zip, FETCH_STAMP, fetchedAtEpochMs.toString())
     }
 
-    /** Null when missing/unparseable (old install with cache but no stamp). */
-    private fun readStamp(): Long? =
-        readCache(FETCH_STAMP)?.trim()?.toLongOrNull()
+    private fun readStamp(zip: String): Long? =
+        readCache(zip, FETCH_STAMP)?.trim()?.toLongOrNull()
 
-    private fun writeExtras(ex: Extras) {
+    private fun writeExtras(zip: String, ex: Extras) {
         val o = JSONObject()
         ex.uvIndex?.let { o.put("uv", it) }
         ex.visibilityMi?.let { o.put("vis", it) }
@@ -86,11 +93,11 @@ class WeatherRepository(private val context: Context) {
         if (ex.pressureStationLevel) o.put("presStation", true)
         ex.sun?.sunrise?.let { o.put("sunrise", it.toString()) }
         ex.sun?.sunset?.let { o.put("sunset", it.toString()) }
-        writeCache(EXTRAS, o.toString())
+        writeCache(zip, EXTRAS, o.toString())
     }
 
-    private fun readExtras(): Extras? {
-        val raw = readCache(EXTRAS) ?: return null
+    private fun readExtras(zip: String): Extras? {
+        val raw = readCache(zip, EXTRAS) ?: return null
         return try {
             val o = JSONObject(raw)
 
@@ -132,29 +139,23 @@ class WeatherRepository(private val context: Context) {
 
     // ---------------------------------------------------------------- reads
 
-    /** Blocking; call only from IO context. Rebuilds domain data from cached raw responses. */
-    private fun loadCachedBlocking(): WeatherData? {
-        val place = Prefs.place(context) ?: return null
+    private fun loadCachedBlocking(place: Place): WeatherData? {
+        migrateLegacyCaches(place.zip)
+        val fetchedAt = readStamp(place.zip) ?: 0L
 
-        // WHY 0L: a missing stamp means an old install (cached before stamps
-        // existed). Stamping 0 makes isFresh() report stale so callers force
-        // exactly one network refresh instead of replaying forever.
-        val fetchedAt = readStamp() ?: 0L
-
-        val daily = readCache(NWS_DAILY)
-        val hourly = readCache(NWS_HOURLY)
+        val daily = readCache(place.zip, NWS_DAILY)
+        val hourly = readCache(place.zip, NWS_HOURLY)
         if (daily != null && hourly != null) {
             try {
-                val bodies = NwsSource.Bodies(daily, hourly, readCache(NWS_OBS), null, null)
+                val bodies = NwsSource.Bodies(daily, hourly, readCache(place.zip, NWS_OBS), null, null)
                 val data = NwsSource.assemble(place, bodies, fetchedAt)
-                val ex = readExtras()
+                val ex = readExtras(place.zip)
                 return if (ex != null) mergeExtras(data, ex) else data
             } catch (_: Exception) {
-                // fall through to Open-Meteo cache
             }
         }
 
-        val om = readCache(OM_BODY)
+        val om = readCache(place.zip, OM_BODY)
         if (om != null) {
             try {
                 return OpenMeteoSource.parse(place, om, fetchedAt)
@@ -164,34 +165,37 @@ class WeatherRepository(private val context: Context) {
         return null
     }
 
-    suspend fun loadCached(): WeatherData? = withContext(Dispatchers.IO) {
-        // Public readers share the same lock as writers. Internal callers
-        // (refreshLocked) use loadCachedBlocking() directly — kotlinx Mutex
-        // is not reentrant.
-        ioMutex.withLock { loadCachedBlocking() }
+    suspend fun loadCached(place: Place? = null): WeatherData? = withContext(Dispatchers.IO) {
+        ioMutex.withLock {
+            val p = place ?: Prefs.place(context) ?: return@withLock null
+            loadCachedBlocking(p)
+        }
     }
 
     // --------------------------------------------------------------- writes
 
-    suspend fun refresh(force: Boolean = false, budgetMs: Long? = null): RefreshResult =
-        withContext(Dispatchers.IO) {
-            ioMutex.withLock {
-                // Computed inside the lock right before work starts, so a
-                // caller queued behind another refresh doesn't inherit that
-                // wait time as its own network budget.
-                val deadlineEpochMs = budgetMs?.let { System.currentTimeMillis() + it }
-                refreshLocked(force, deadlineEpochMs)
-            }
+    suspend fun refresh(
+        force: Boolean = false,
+        budgetMs: Long? = null,
+        place: Place? = null
+    ): RefreshResult = withContext(Dispatchers.IO) {
+        ioMutex.withLock {
+            val deadlineEpochMs = budgetMs?.let { System.currentTimeMillis() + it }
+            val p = place ?: Prefs.place(context)
+                ?: return@withLock RefreshResult.Failure("No ZIP code set yet.", null)
+            refreshLocked(p, force, deadlineEpochMs)
         }
+    }
 
-    private suspend fun refreshLocked(force: Boolean, deadlineEpochMs: Long?): RefreshResult {
-        val place = Prefs.place(context)
-            ?: return RefreshResult.Failure("No ZIP code set yet.", null)
+    private suspend fun refreshLocked(
+        place: Place,
+        force: Boolean,
+        deadlineEpochMs: Long?
+    ): RefreshResult {
+        migrateLegacyCaches(place.zip)
 
         if (!force) {
-            val cached = loadCachedBlocking()
-            // updatedAtEpochMs is the fetch stamp (loadCachedBlocking passes the
-            // sidecar value), so this measures age since the actual fetch.
+            val cached = loadCachedBlocking(place)
             if (cached != null &&
                 isFresh(cached.updatedAtEpochMs, System.currentTimeMillis())
             ) {
@@ -199,25 +203,20 @@ class WeatherRepository(private val context: Context) {
             }
         }
 
-        // 1) Primary: NWS
         try {
             val bodies = NwsSource.fetchBodies(place, deadlineEpochMs)
             val fetchedAt = System.currentTimeMillis()
             var data = NwsSource.assemble(place, bodies, fetchedAt)
-            writeCache(NWS_DAILY, bodies.daily)
-            writeCache(NWS_HOURLY, bodies.hourly)
-            // Keep last-good METAR when obs was skipped (budget/timeout).
-            bodies.obs?.let { writeCache(NWS_OBS, it) }
-            deleteCache(OM_BODY)
-            // Stamp only after the forecast pair is durably cached; enrichment
-            // below is best-effort and must not affect the freshness window.
-            writeStamp(fetchedAt)
-            Prefs.updateLabels(context, data.place.city, data.place.state)
+            writeCache(place.zip, NWS_DAILY, bodies.daily)
+            writeCache(place.zip, NWS_HOURLY, bodies.hourly)
+            bodies.obs?.let { writeCache(place.zip, NWS_OBS, it) }
+            deleteCache(place.zip, OM_BODY)
+            writeStamp(place.zip, fetchedAt)
+            Prefs.updateLabels(context, place.zip, data.place.city, data.place.state)
 
-            // 2) Enrichment (best-effort, never fatal)
             try {
                 val ex = OpenMeteoSource.fetchExtras(place, deadlineEpochMs)
-                writeExtras(ex)
+                writeExtras(place.zip, ex)
                 data = mergeExtras(data, ex)
             } catch (e: CancellationException) {
                 throw e
@@ -227,49 +226,52 @@ class WeatherRepository(private val context: Context) {
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // fall through to fallback source
         }
 
-        // 3) Fallback: full Open-Meteo
         try {
             val body = OpenMeteoSource.fetchBody(place, deadlineEpochMs)
             val fetchedAt = System.currentTimeMillis()
             val data = OpenMeteoSource.parse(place, body, fetchedAt)
-            writeCache(OM_BODY, body)
-            deleteCache(NWS_DAILY)
-            deleteCache(NWS_HOURLY)
-            deleteCache(NWS_OBS)
-            writeStamp(fetchedAt)
+            writeCache(place.zip, OM_BODY, body)
+            deleteCache(place.zip, NWS_DAILY)
+            deleteCache(place.zip, NWS_HOURLY)
+            deleteCache(place.zip, NWS_OBS)
+            writeStamp(place.zip, fetchedAt)
             return RefreshResult.Success(data, fromCache = false)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             return RefreshResult.Failure(
                 e.message ?: "Could not reach weather services.",
-                loadCachedBlocking()
+                loadCachedBlocking(place)
             )
         }
     }
 
-    /** Resolve + persist a new ZIP; clears stale caches so the next refresh is fresh. */
-    suspend fun setZip(zip: String): Place = withContext(Dispatchers.IO) {
+    /** Geocode and persist a ZIP. Existing locations are kept; duplicates select. */
+    suspend fun addZip(zip: String): Place = withContext(Dispatchers.IO) {
         ioMutex.withLock {
             val place = ZipGeocoder.geocode(zip)
-            Prefs.savePlace(context, place)
-            clearCaches()
+            val existed = Prefs.places(context).any { it.zip == place.zip }
+            Prefs.addPlace(context, place)
+            if (!existed) clearCaches(place.zip)
             place
         }
     }
 
+    suspend fun removeZip(zip: String) = withContext(Dispatchers.IO) {
+        ioMutex.withLock {
+            Prefs.removePlace(context, zip)
+            clearCaches(zip)
+        }
+    }
+
     companion object {
-        // WHY process-wide: instances are created per entry point (UI
-        // remember{} vs widget applicationContext) but they all hit the same
-        // cache files, so the lock must be shared across instances.
+        // Process-wide: UI and widgets construct separate instances that share files.
         private val ioMutex = Mutex()
 
         const val STALE_MS = 15 * 60 * 1000L
 
-        /** A cached payload is fresh only when its age is in [0, staleMs). */
         fun isFresh(
             fetchedAtEpochMs: Long,
             nowEpochMs: Long,

@@ -11,6 +11,9 @@ import com.xx.weather.R
 import com.xx.weather.data.Prefs
 import com.xx.weather.data.WeatherRepository
 import com.xx.weather.data.model.WeatherData
+import com.xx.weather.theme.FOREGROUND_INK
+import com.xx.weather.theme.FOREGROUND_WHITE
+import com.xx.weather.theme.ThemeController
 import com.xx.weather.ui.Fmt
 import com.xx.weather.ui.components.ConditionIcon
 import kotlinx.coroutines.CoroutineScope
@@ -114,8 +117,31 @@ object WidgetUpdater {
             }
         }
 
+        paintTheme(rv, context, wide)
         rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context))
         return rv
+    }
+
+    private fun paintTheme(rv: android.widget.RemoteViews, context: Context, wide: Boolean) {
+        val theme = ThemeController.current(context)
+        val bg = theme.background.toInt()
+        val fg = (if (theme.isDark) FOREGROUND_WHITE else FOREGROUND_INK).toInt()
+        val muted = (fg and 0x00FFFFFF) or (0xB3 shl 24)
+        val faint = (fg and 0x00FFFFFF) or (0x80 shl 24)
+        rv.setInt(R.id.widget_root, "setBackgroundColor", bg)
+        rv.setTextColor(R.id.widget_temp, fg)
+        rv.setTextColor(R.id.widget_cond, muted)
+        rv.setTextColor(R.id.widget_hilo, faint)
+        rv.setInt(R.id.widget_icon, "setColorFilter", fg)
+        if (wide) {
+            rv.setTextColor(R.id.widget_loc, fg)
+            rv.setTextColor(R.id.widget_updated, faint)
+            for (i in 0 until 6) {
+                rv.setTextColor(HOUR_TIME_IDS[i], muted)
+                rv.setTextColor(HOUR_TEMP_IDS[i], fg)
+                rv.setInt(HOUR_ICON_IDS[i], "setColorFilter", fg)
+            }
+        }
     }
 
     private fun errorViews(context: Context, wide: Boolean): android.widget.RemoteViews {
@@ -134,6 +160,7 @@ object WidgetUpdater {
                 rv.setViewVisibility(HOUR_ICON_IDS[i], android.view.View.INVISIBLE)
             }
         }
+        paintTheme(rv, context, wide)
         rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context))
         return rv
     }
@@ -149,6 +176,10 @@ object WidgetUpdater {
 
 abstract class BaseWeatherWidget : AppWidgetProvider() {
     protected abstract val wide: Boolean
+
+    override fun onEnabled(context: Context) {
+        RefreshScheduler.ensure(context)
+    }
 
     override fun onUpdate(
         context: Context,

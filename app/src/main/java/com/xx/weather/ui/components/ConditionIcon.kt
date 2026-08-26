@@ -8,6 +8,7 @@ import androidx.compose.ui.res.painterResource
 import com.xx.weather.R
 import com.xx.weather.data.model.Condition
 import com.xx.weather.data.model.Conditions
+import com.xx.weather.ui.theme.LocalWeatherPalette
 
 /** Maps normalized conditions to our hand-drawn vector assets. */
 object ConditionIcon {
@@ -36,7 +37,7 @@ object ConditionIcon {
         condition: Condition,
         isDay: Boolean,
         modifier: Modifier = Modifier,
-        tint: Color = Color.White
+        tint: Color = LocalWeatherPalette.current.onSurface
     ) {
         androidx.compose.material3.Icon(
             painter = painterResource(res(condition, isDay)),

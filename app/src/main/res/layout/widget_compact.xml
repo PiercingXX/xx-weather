@@ -6,6 +6,14 @@
     android:background="@drawable/widget_bg"
     android:padding="12dp">
 
+    <ImageView
+        android:id="@+id/widget_bg_fill"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_bg" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
