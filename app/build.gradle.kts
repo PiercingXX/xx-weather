@@ -14,13 +14,13 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.xx.weather"
-    compileSdk = 36
+    compileSdk = 35
     buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.xx.weather"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 4
         versionName = "1.2.0"
     }
@@ -75,7 +75,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-ktx:1.16.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     testImplementation("junit:junit:4.13.2")

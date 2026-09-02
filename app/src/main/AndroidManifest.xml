@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- POST_NOTIFICATIONS (API 33+): declared so runtime notification
          permission can be requested at runtime; no GMS, no location
-         permission is used. -->
+         permission is used. Exactly one declaration must remain. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Family theme-sync. Do NOT <permission>-declare THEME_SYNC: this app
