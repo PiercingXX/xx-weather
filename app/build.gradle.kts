@@ -77,7 +77,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("androidx.work:work-runtime-ktx:2.10.2")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
