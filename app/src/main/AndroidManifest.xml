@@ -3,6 +3,8 @@
 
     <!-- GrapheneOS-friendly: no location, no GMS. Manual ZIP code entry only. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- POST_NOTIFICATIONS (API 33+): declared so runtime notification
+         permission can be requested; no GMS, no location. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Family theme-sync. Do NOT <permission>-declare THEME_SYNC: this app
