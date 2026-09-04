@@ -22,6 +22,7 @@ Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
 | W1 | **Implement weather alerts.** That is why `POST_NOTIFICATIONS` is there. |
 | W2 | Device QA **is** the rest of the ship list. |
 | W3 | Units stay temperature-only (Phase 7 option A). |
+| W4 | **Lock-screen / glance widget:** feels-like + wind. No radar. No location. |
 
 ---
 
@@ -42,6 +43,21 @@ Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
 
 ---
 
+## W4 — Feels-like / wind glance
+
+Not a third forecast app. A small widget (2×1 or lock-screen) that
+reads the cache the 4×2 already uses.
+
+- [ ] Show current **feels-like** and **wind** (speed + unit already in
+  the model). ZIP label. Tap opens the app on that ZIP.
+- [ ] Same freshness / airplane rules as the other widgets — last-good
+  data, never a lying clock.
+- [ ] No new network poller. No location.
+- **Accept:** add the glance next to the 2×2; after a fetch it matches
+  the hero extras. Airplane overnight still shows last-good.
+
+---
+
 ## Manual QA (device)
 
 - [ ] First run: empty → Set ZIP → hero, hourly, 10-day, details populate
@@ -58,6 +74,7 @@ Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
 - [ ] °F / °C: hero + hourly convert
 - [ ] No location / sensors prompt on GrapheneOS
 - [ ] Alert path from W1 on this phone
+- [ ] W4 glance: feels-like + wind match the hero; tap opens that ZIP
 
 **Accept:** dated notes. Then personal sideload is 1.2.
 
