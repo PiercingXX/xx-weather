@@ -3,5 +3,6 @@
     <string name="app_name">XX Weather</string>
     <string name="widget_compact_label">XX Weather (Compact)</string>
     <string name="widget_wide_label">XX Weather (Forecast)</string>
+    <string name="widget_glance_label">XX Weather (Glance)</string>
     <string name="widget_no_data">Tap to set ZIP</string>
 </resources>

@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToInt
 
 /**
  * Home-screen widgets (classic AppWidgetProvider + RemoteViews).
@@ -31,6 +32,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  - renders instantly from cache; falls back to a network refresh if cold
  */
 object WidgetUpdater {
+
+    /** Which widget layout a provider renders. */
+    enum class WidgetKind { COMPACT, WIDE, GLANCE }
 
     private val HOUR_TIME_IDS = intArrayOf(
         R.id.widget_h0_time, R.id.widget_h1_time, R.id.widget_h2_time,
@@ -51,29 +55,34 @@ object WidgetUpdater {
 
     fun updateAll(context: Context, data: WeatherData?) {
         val mgr = AppWidgetManager.getInstance(context) ?: return
-        updateProvider(context, mgr, ComponentName(context, CompactWeatherWidget::class.java), wide = false, data = data)
-        updateProvider(context, mgr, ComponentName(context, WideWeatherWidget::class.java), wide = true, data = data)
+        updateProvider(context, mgr, ComponentName(context, CompactWeatherWidget::class.java), WidgetKind.COMPACT, data)
+        updateProvider(context, mgr, ComponentName(context, WideWeatherWidget::class.java), WidgetKind.WIDE, data)
+        updateProvider(context, mgr, ComponentName(context, GlanceWeatherWidget::class.java), WidgetKind.GLANCE, data)
     }
 
     private fun updateProvider(
         context: Context,
         mgr: AppWidgetManager,
         provider: ComponentName,
-        wide: Boolean,
+        kind: WidgetKind,
         data: WeatherData?
     ) {
         val ids = mgr.getAppWidgetIds(provider) ?: return
         for (id in ids) {
-            mgr.updateAppWidget(id, views(context, wide, data))
+            mgr.updateAppWidget(id, views(context, kind, data))
         }
     }
 
-    fun views(context: Context, wide: Boolean, data: WeatherData?): android.widget.RemoteViews {
-        if (data == null) return errorViews(context, wide)
+    fun views(context: Context, kind: WidgetKind, data: WeatherData?): android.widget.RemoteViews {
+        if (data == null) return errorViews(context, kind)
 
         val rv = android.widget.RemoteViews(
             context.packageName,
-            if (wide) R.layout.widget_wide else R.layout.widget_compact
+            when (kind) {
+                WidgetKind.WIDE -> R.layout.widget_wide
+                WidgetKind.GLANCE -> R.layout.widget_glance
+                WidgetKind.COMPACT -> R.layout.widget_compact
+            }
         )
         val units = Prefs.units(context)
         val current = data.current
@@ -81,22 +90,42 @@ object WidgetUpdater {
 
         rv.setTextViewText(R.id.widget_temp, Fmt.temp(current.tempF, units))
         rv.setTextViewText(R.id.widget_cond, current.conditionText)
-        // Shared formatter omits "H:" on night-only dates instead of "H:--".
-        rv.setTextViewText(
-            R.id.widget_hilo,
-            if (today != null) Fmt.hilo(today.hiF, today.loF, units) else ""
-        )
         rv.setImageViewResource(
             R.id.widget_icon,
             ConditionIcon.res(current.condition, Fmt.isDaytime(data))
         )
 
-        if (wide) {
+        if (kind == WidgetKind.WIDE || kind == WidgetKind.GLANCE) {
             val state = data.place.state
             rv.setTextViewText(
                 R.id.widget_loc,
                 if (state.isBlank()) data.place.city else "${data.place.city}, $state"
             )
+        }
+
+        if (kind == WidgetKind.COMPACT) {
+            // Shared formatter omits "H:" on night-only dates instead of "H:--".
+            rv.setTextViewText(
+                R.id.widget_hilo,
+                if (today != null) Fmt.hilo(today.hiF, today.loF, units) else ""
+            )
+        }
+
+        if (kind == WidgetKind.GLANCE) {
+            current.feelsLikeF?.let {
+                rv.setTextViewText(R.id.widget_feels, "Feels like ${Fmt.temp(it, units)}")
+            } ?: rv.setTextViewText(R.id.widget_feels, "")
+            val wind = current.windMph
+            rv.setTextViewText(
+                R.id.widget_wind,
+                if (wind != null) {
+                    val dir = current.windDirDeg?.let { Fmt.windDir(it) + " " } ?: ""
+                    "$dir${wind.roundToInt()} mph"
+                } else ""
+            )
+        }
+
+        if (kind == WidgetKind.WIDE) {
             rv.setTextViewText(R.id.widget_updated, "Updated ${Fmt.updatedLabel(data.updatedAtEpochMs)}")
 
             val hours = data.hourly.take(6)
@@ -117,12 +146,12 @@ object WidgetUpdater {
             }
         }
 
-        paintTheme(rv, context, wide)
+        paintTheme(rv, context, kind)
         rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context))
         return rv
     }
 
-    private fun paintTheme(rv: android.widget.RemoteViews, context: Context, wide: Boolean) {
+    private fun paintTheme(rv: android.widget.RemoteViews, context: Context, kind: WidgetKind) {
         val theme = ThemeController.current(context)
         val bg = theme.background.toInt()
         val fg = (if (theme.isDark) FOREGROUND_WHITE else FOREGROUND_INK).toInt()
@@ -131,10 +160,18 @@ object WidgetUpdater {
         rv.setInt(R.id.widget_root, "setBackgroundColor", bg)
         rv.setTextColor(R.id.widget_temp, fg)
         rv.setTextColor(R.id.widget_cond, muted)
-        rv.setTextColor(R.id.widget_hilo, faint)
         rv.setInt(R.id.widget_icon, "setColorFilter", fg)
-        if (wide) {
+        if (kind == WidgetKind.COMPACT) {
+            rv.setTextColor(R.id.widget_hilo, faint)
+        }
+        if (kind == WidgetKind.WIDE || kind == WidgetKind.GLANCE) {
             rv.setTextColor(R.id.widget_loc, fg)
+        }
+        if (kind == WidgetKind.GLANCE) {
+            rv.setTextColor(R.id.widget_feels, muted)
+            rv.setTextColor(R.id.widget_wind, muted)
+        }
+        if (kind == WidgetKind.WIDE) {
             rv.setTextColor(R.id.widget_updated, faint)
             for (i in 0 until 6) {
                 rv.setTextColor(HOUR_TIME_IDS[i], muted)
@@ -144,14 +181,26 @@ object WidgetUpdater {
         }
     }
 
-    private fun errorViews(context: Context, wide: Boolean): android.widget.RemoteViews {
-        val layout = if (wide) R.layout.widget_wide else R.layout.widget_compact
+    private fun errorViews(context: Context, kind: WidgetKind): android.widget.RemoteViews {
+        val layout = when (kind) {
+            WidgetKind.WIDE -> R.layout.widget_wide
+            WidgetKind.GLANCE -> R.layout.widget_glance
+            WidgetKind.COMPACT -> R.layout.widget_compact
+        }
         val rv = android.widget.RemoteViews(context.packageName, layout)
         rv.setTextViewText(R.id.widget_temp, "--")
         rv.setTextViewText(R.id.widget_cond, context.getString(R.string.widget_no_data))
-        rv.setTextViewText(R.id.widget_hilo, "")
-        if (wide) {
+        if (kind == WidgetKind.COMPACT) {
+            rv.setTextViewText(R.id.widget_hilo, "")
+        }
+        if (kind == WidgetKind.WIDE || kind == WidgetKind.GLANCE) {
             rv.setTextViewText(R.id.widget_loc, "XX Weather")
+        }
+        if (kind == WidgetKind.GLANCE) {
+            rv.setTextViewText(R.id.widget_feels, "")
+            rv.setTextViewText(R.id.widget_wind, "")
+        }
+        if (kind == WidgetKind.WIDE) {
             rv.setTextViewText(R.id.widget_updated, "")
             for (i in 0 until 6) {
                 rv.setTextViewText(HOUR_TIME_IDS[i], "")
@@ -160,7 +209,7 @@ object WidgetUpdater {
                 rv.setViewVisibility(HOUR_ICON_IDS[i], android.view.View.INVISIBLE)
             }
         }
-        paintTheme(rv, context, wide)
+        paintTheme(rv, context, kind)
         rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context))
         return rv
     }
@@ -175,7 +224,7 @@ object WidgetUpdater {
 }
 
 abstract class BaseWeatherWidget : AppWidgetProvider() {
-    protected abstract val wide: Boolean
+    protected abstract val kind: WidgetUpdater.WidgetKind
 
     override fun onEnabled(context: Context) {
         RefreshScheduler.ensure(context)
@@ -219,7 +268,7 @@ abstract class BaseWeatherWidget : AppWidgetProvider() {
                     }
                 }
                 for (id in appWidgetIds) {
-                    appWidgetManager.updateAppWidget(id, WidgetUpdater.views(context, wide, data))
+                    appWidgetManager.updateAppWidget(id, WidgetUpdater.views(context, kind, data))
                 }
             } catch (_: Exception) {
                 // Leave widgets untouched on transient failure; next cycle retries.
@@ -231,9 +280,13 @@ abstract class BaseWeatherWidget : AppWidgetProvider() {
 }
 
 class CompactWeatherWidget : BaseWeatherWidget() {
-    override val wide = false
+    override val kind = WidgetUpdater.WidgetKind.COMPACT
 }
 
 class WideWeatherWidget : BaseWeatherWidget() {
-    override val wide = true
+    override val kind = WidgetUpdater.WidgetKind.WIDE
+}
+
+class GlanceWeatherWidget : BaseWeatherWidget() {
+    override val kind = WidgetUpdater.WidgetKind.GLANCE
 }
