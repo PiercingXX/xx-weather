@@ -1,5 +1,9 @@
 package com.xx.weather.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -48,11 +52,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xx.weather.R
+import com.xx.weather.data.AlertEvaluator
 import com.xx.weather.data.Prefs
 import com.xx.weather.data.WeatherRepository
+import com.xx.weather.data.ZipAlertTriggers
 import com.xx.weather.data.model.Place
 import com.xx.weather.data.model.Units
 import com.xx.weather.data.model.WeatherData
+import com.xx.weather.notify.WeatherAlerts
 import com.xx.weather.ui.components.ConditionIcon
 import com.xx.weather.ui.components.DailyCard
 import com.xx.weather.ui.components.DetailsGrid
@@ -69,7 +76,8 @@ import kotlinx.coroutines.launch
 fun WeatherScreen(
     repository: WeatherRepository,
     context: android.content.Context,
-    startTick: Long = 0L
+    startTick: Long = 0L,
+    intentZip: String? = null,
 ) {
     var places by remember { mutableStateOf(Prefs.places(context)) }
     var selectedZip by remember { mutableStateOf(Prefs.selectedZip(context)) }
@@ -83,8 +91,62 @@ fun WeatherScreen(
     var settingsError by remember { mutableStateOf<String?>(null) }
     var units by remember { mutableStateOf(Prefs.units(context)) }
     var selectedDay by remember { mutableStateOf<LocalDate?>(null) }
+    var alertsEnabled by remember { mutableStateOf(false) }
+    var alertsDenied by remember { mutableStateOf(false) }
+    var precipEnabled by remember { mutableStateOf(false) }
+    var precipHours by remember { mutableStateOf(AlertEvaluator.DEFAULT_PRECIP_HOURS) }
+    var tempEnabled by remember { mutableStateOf(false) }
+    var tempAtOrBelowF by remember { mutableStateOf(AlertEvaluator.DEFAULT_TEMP_F) }
     val scope = rememberCoroutineScope()
     val palette = LocalWeatherPalette.current
+
+    fun loadAlertTriggers() {
+        val zip = selectedZip ?: return
+        val t = Prefs.alertTriggers(context, zip) ?: ZipAlertTriggers()
+        precipEnabled = t.precipEnabled
+        precipHours = t.precipHours
+        tempEnabled = t.tempEnabled
+        tempAtOrBelowF = t.tempAtOrBelowF
+    }
+
+    fun persistTriggers(next: ZipAlertTriggers) {
+        val zip = selectedZip ?: return
+        Prefs.setAlertTriggers(context, zip, next)
+        precipEnabled = next.precipEnabled
+        precipHours = next.precipHours
+        tempEnabled = next.tempEnabled
+        tempAtOrBelowF = next.tempAtOrBelowF
+    }
+
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            Prefs.setAlertsEnabled(context, true)
+            selectedZip?.let { Prefs.ensureAlertTriggers(context, it) }
+            alertsEnabled = true
+            alertsDenied = false
+            WeatherAlerts.ensureChannel(context)
+            loadAlertTriggers()
+        } else {
+            Prefs.setAlertsEnabled(context, false)
+            alertsEnabled = false
+            alertsDenied = true
+        }
+    }
+
+    fun tryEnableAlerts() {
+        if (Build.VERSION.SDK_INT >= 33 && !WeatherAlerts.notificationsGranted(context)) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        Prefs.setAlertsEnabled(context, true)
+        selectedZip?.let { Prefs.ensureAlertTriggers(context, it) }
+        alertsEnabled = true
+        alertsDenied = false
+        WeatherAlerts.ensureChannel(context)
+        loadAlertTriggers()
+    }
 
     val pagerState = rememberPagerState(
         initialPage = places.indexOfFirst { it.zip == selectedZip }.coerceAtLeast(0),
@@ -95,10 +157,11 @@ fun WeatherScreen(
         val next = applyRefreshResult(ZipRefreshState(dataByZip, errors), zip, result)
         dataByZip = next.dataByZip
         errors = next.errors
-        if (result is WeatherRepository.RefreshResult.Success &&
-            zip == Prefs.selectedZip(context)
-        ) {
-            WidgetUpdater.updateAll(context, result.data)
+        if (result is WeatherRepository.RefreshResult.Success) {
+            WeatherAlerts.onWeather(context, result.data)
+            if (zip == Prefs.selectedZip(context)) {
+                WidgetUpdater.updateAll(context, result.data)
+            }
         }
         loading = false
     }
@@ -158,6 +221,29 @@ fun WeatherScreen(
             delay(15 * 60 * 1000L)
             refreshVisible(force = false)
         }
+    }
+
+    LaunchedEffect(intentZip) {
+        val zip = intentZip ?: return@LaunchedEffect
+        if (places.none { it.zip == zip } && Prefs.places(context).none { it.zip == zip }) return@LaunchedEffect
+        selectedZip = zip
+        Prefs.setSelectedZip(context, zip)
+        collapsed = false
+        Prefs.setCollapsed(context, false)
+        loadAlertTriggers()
+    }
+
+    LaunchedEffect(showSettings, selectedZip) {
+        if (!showSettings) return@LaunchedEffect
+        val granted = WeatherAlerts.notificationsGranted(context)
+        if (Prefs.alertsEnabled(context) && !granted) {
+            Prefs.setAlertsEnabled(context, false)
+            alertsEnabled = false
+            alertsDenied = true
+        } else {
+            alertsEnabled = Prefs.alertsEnabled(context) && granted
+        }
+        loadAlertTriggers()
     }
 
     LaunchedEffect(selectedZip, collapsed, places) {
@@ -359,6 +445,15 @@ fun WeatherScreen(
             currentUnits = units,
             applying = settingsApplying,
             error = settingsError,
+            alerts = AlertSettingsUi(
+                enabled = alertsEnabled,
+                denied = alertsDenied,
+                zipLabel = places.find { it.zip == selectedZip }?.let { "${it.displayName} (${it.zip})" },
+                precipEnabled = precipEnabled,
+                precipHours = precipHours,
+                tempEnabled = tempEnabled,
+                tempAtOrBelowF = tempAtOrBelowF,
+            ),
             onDismiss = {
                 showSettings = false
                 settingsError = null
@@ -375,6 +470,7 @@ fun WeatherScreen(
                         selectedZip = place.zip
                         collapsed = false
                         Prefs.setCollapsed(context, false)
+                        if (Prefs.alertsEnabled(context)) Prefs.ensureAlertTriggers(context, place.zip)
                         settingsApplying = false
                         showSettings = false
                         refreshPlace(place, force = true)
@@ -397,12 +493,40 @@ fun WeatherScreen(
                     selectedZip = Prefs.selectedZip(context)
                     dataByZip = dataByZip - zip
                     errors = errors - zip
+                    loadAlertTriggers()
                     if (places.isEmpty()) {
                         showSettings = false
                         WidgetUpdater.updateAll(context, null)
                     }
                 }
-            }
+            },
+            onAlertsEnabledChange = { want ->
+                if (want) tryEnableAlerts() else {
+                    Prefs.setAlertsEnabled(context, false)
+                    alertsEnabled = false
+                    alertsDenied = false
+                }
+            },
+            onPrecipEnabledChange = { on ->
+                persistTriggers(
+                    ZipAlertTriggers(on, precipHours, tempEnabled, tempAtOrBelowF)
+                )
+            },
+            onPrecipHoursChange = { hours ->
+                persistTriggers(
+                    ZipAlertTriggers(precipEnabled, hours, tempEnabled, tempAtOrBelowF)
+                )
+            },
+            onTempEnabledChange = { on ->
+                persistTriggers(
+                    ZipAlertTriggers(precipEnabled, precipHours, on, tempAtOrBelowF)
+                )
+            },
+            onTempThresholdChange = { threshold ->
+                persistTriggers(
+                    ZipAlertTriggers(precipEnabled, precipHours, tempEnabled, threshold)
+                )
+            },
         )
     }
 

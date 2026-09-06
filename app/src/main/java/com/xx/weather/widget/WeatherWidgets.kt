@@ -98,11 +98,7 @@ object WidgetUpdater {
         )
 
         if (kind == WidgetKind.WIDE || kind == WidgetKind.GLANCE) {
-            val state = data.place.state
-            rv.setTextViewText(
-                R.id.widget_loc,
-                if (state.isBlank()) data.place.city else "${data.place.city}, $state"
-            )
+            rv.setTextViewText(R.id.widget_loc, locLabel(data, kind))
         }
 
         if (kind == WidgetKind.COMPACT) {
@@ -149,8 +145,17 @@ object WidgetUpdater {
         }
 
         paintTheme(rv, context, kind)
-        rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context))
+        rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context, data.place.zip))
         return rv
+    }
+
+    private fun locLabel(data: WeatherData, kind: WidgetKind): String {
+        val place = data.place
+        if (kind == WidgetKind.GLANCE) {
+            val city = place.city
+            return if (city.isBlank() || city == place.zip) place.zip else "$city · ${place.zip}"
+        }
+        return if (place.state.isBlank()) place.city else "${place.city}, ${place.state}"
     }
 
     private fun paintTheme(rv: android.widget.RemoteViews, context: Context, kind: WidgetKind) {
@@ -213,17 +218,20 @@ object WidgetUpdater {
             }
         }
         paintTheme(rv, context, kind)
-        rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context))
+        rv.setOnClickPendingIntent(R.id.widget_root, tapIntent(context, Prefs.selectedZip(context)))
         return rv
     }
 
-    private fun tapIntent(context: Context): PendingIntent =
-        PendingIntent.getActivity(
+    private fun tapIntent(context: Context, zip: String?): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java)
+        if (!zip.isNullOrBlank()) intent.putExtra(MainActivity.EXTRA_ZIP, zip)
+        return PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java),
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
 }
 
 /** Synced-theme colors for RemoteViews. PoP uses [muted], same as hour time. */

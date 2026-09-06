@@ -5,6 +5,9 @@ Single ZIP code setup, home-screen widgets, animated condition backgrounds, and
 the most accurate free weather pipeline available for US locations — with **no
 Google Play Services, no location permission, no tracking**.
 
+versionName **1.2.0**. Background refresh is a **15-minute WorkManager** pass
+(plus in-app / widget cache paints).
+
 ## Accuracy pipeline (researched)
 
 | Priority | Source | Role |
@@ -27,11 +30,26 @@ Google Play Services, no location permission, no tracking**.
 - °F / °C toggle.
 - Multiple saved ZIP codes; swipe left/right between full forecasts, or
   toggle the collapsed list and tap a city for detail.
-- Two widgets: **Compact (2×2)** and **Forecast (4×2 with 6-hour strip)**.
-  Updates every 30 min (system floor), immediately after in-app refreshes, and
-  render instantly from cache.
+- Three widgets: **Compact (2×2)**, **Forecast (4×2 with 6-hour strip)**, and
+  **Glance (2×1 / lock-screen: feels-like, wind, ZIP)**. They paint from cache,
+  refresh with the 15-minute WorkManager pass, and update immediately after
+  in-app refreshes. System `updatePeriodMillis` is still the 30-minute floor.
+- Optional weather alerts (rain in the next N hours, temperature at/below a
+  °F threshold) for the selected ZIP. Evaluated on the same 15-minute refresh
+  — no second poller. One notification per trigger per fetch window.
 - Offline-first: raw API responses are cached to app storage; stale data stays
-  visible with an "Updated" stamp if the network fails.
+  visible with an "Updated" stamp if the network fails. A GrapheneOS Network
+  revoke does not crash or fake “updated just now.”
+
+## Permissions
+
+| Permission | Required? | Why |
+|---|---|---|
+| `INTERNET` | Yes | NWS / Open-Meteo / ZIP geocode. |
+| `POST_NOTIFICATIONS` | Optional | Only requested if you turn on weather alerts (API 33+). Deny keeps alerts off; forecasts still work. |
+| `THEME_SYNC` (uses-permission) | Family | Receives XX-Launcher theme broadcasts. Not a second `<permission>` declare. |
+
+No location, no sensors, no GMS.
 
 ## Cleanroom statement
 
@@ -72,10 +90,12 @@ adb install app-release.apk
    browser or Files app.
 3. Open the APK → Install.
 
-The app requests only `INTERNET`. No GMS dependency,
-so it runs identically on GrapheneOS, CalyxOS, or stock Android 8+.
+`INTERNET` is required for forecasts. Notification permission is optional
+and only asked if you enable alerts. No GMS dependency, so it runs on
+GrapheneOS, CalyxOS, or stock Android 8+.
 
 ## First run
 
 Open the app → **Set ZIP Code** → enter any 5-digit US ZIP → Save. That's it.
-Long-press the home screen → Widgets → XX Weather to add either widget.
+Long-press the home screen → Widgets → XX Weather to add Compact, Forecast,
+or Glance. Settings → Weather alerts to opt into rain / freeze notifications.

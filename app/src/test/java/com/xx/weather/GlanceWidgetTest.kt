@@ -34,4 +34,17 @@ class GlanceWidgetTest {
         assertTrue(xml.contains("@+id/widget_wind"))
         assertTrue(xml.contains("@+id/widget_loc"))
     }
+
+    @Test
+    fun `glance renderer paints feels-like wind zip and taps through to that zip`() {
+        val src = File("src/main/java/com/xx/weather/widget/WeatherWidgets.kt").takeIf { it.exists() }
+            ?: File("app/src/main/java/com/xx/weather/widget/WeatherWidgets.kt")
+        val text = src.readText()
+        assertTrue(text.contains("widget_feels"))
+        assertTrue(text.contains("widget_wind"))
+        assertTrue(text.contains("place.zip"))
+        assertTrue(text.contains("MainActivity.EXTRA_ZIP"))
+        assertTrue(text.contains("Feels like"))
+        assertTrue(text.contains("mph"))
+    }
 }

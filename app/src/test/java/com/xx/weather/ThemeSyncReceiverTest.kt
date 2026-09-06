@@ -29,3 +29,29 @@ class ThemeSyncReceiverTest {
         Class.forName("com.xx.weather.theme.ThemeSyncReceiver")
     }
 }
+
+class AlertsWiringTest {
+
+    @Test
+    fun `refresh worker evaluates alerts on the existing 15-minute pass`() {
+        val src = File("src/main/java/com/xx/weather/widget/RefreshScheduler.kt").takeIf { it.exists() }
+            ?: File("app/src/main/java/com/xx/weather/widget/RefreshScheduler.kt")
+        val text = src.readText()
+        assertTrue(text.contains("WeatherAlerts.onWeather"))
+        assertTrue(text.contains("INTERVAL_MINUTES = 15L"))
+        assertTrue(text.contains("PeriodicWorkRequestBuilder<RefreshWorker>"))
+        assertTrue(!text.contains("AlertWorker"))
+    }
+
+    @Test
+    fun `settings requests notification permission on first enable`() {
+        val screen = File("src/main/java/com/xx/weather/ui/WeatherScreen.kt").takeIf { it.exists() }
+            ?: File("app/src/main/java/com/xx/weather/ui/WeatherScreen.kt")
+        val settings = File("src/main/java/com/xx/weather/ui/SettingsDialog.kt").takeIf { it.exists() }
+            ?: File("app/src/main/java/com/xx/weather/ui/SettingsDialog.kt")
+        val screenText = screen.readText()
+        assertTrue(screenText.contains("POST_NOTIFICATIONS"))
+        assertTrue(screenText.contains("RequestPermission"))
+        assertTrue(settings.readText().contains("Alerts stay off"))
+    }
+}

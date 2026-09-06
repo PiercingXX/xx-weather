@@ -48,7 +48,7 @@ object PlacesCodec {
     }
 }
 
-/** SharedPreferences for locations, selected ZIP, units, and list/detail mode. */
+/** SharedPreferences for locations, selected ZIP, units, alerts, and list/detail mode. */
 object Prefs {
     private const val FILE = "xx_weather_prefs"
     private const val KEY_ZIP = "zip"
@@ -60,6 +60,9 @@ object Prefs {
     private const val KEY_PLACES = "places_json"
     private const val KEY_SELECTED_ZIP = "selected_zip"
     private const val KEY_COLLAPSED = "collapsed"
+    private const val KEY_ALERTS_ENABLED = "alerts_enabled"
+    private const val KEY_ALERTS_JSON = "alerts_json"
+    private const val KEY_ALERT_DEDUPE = "alert_dedupe"
 
     private fun sp(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -129,6 +132,7 @@ object Prefs {
         if (selectedZip(context) == zip) {
             setSelectedZip(context, next.firstOrNull()?.zip)
         }
+        removeAlertTriggers(context, zip)
     }
 
     fun updateLabels(context: Context, zip: String, city: String, state: String) {
@@ -151,5 +155,46 @@ object Prefs {
 
     fun setUnits(context: Context, units: Units) {
         sp(context).edit().putString(KEY_UNITS, if (units == Units.CELSIUS) "C" else "F").apply()
+    }
+
+    fun alertsEnabled(context: Context): Boolean =
+        sp(context).getBoolean(KEY_ALERTS_ENABLED, false)
+
+    fun setAlertsEnabled(context: Context, enabled: Boolean) {
+        sp(context).edit().putBoolean(KEY_ALERTS_ENABLED, enabled).apply()
+    }
+
+    fun alertTriggers(context: Context, zip: String): ZipAlertTriggers? =
+        ZipAlertCodec.decode(sp(context).getString(KEY_ALERTS_JSON, null))[zip]
+
+    fun setAlertTriggers(context: Context, zip: String, triggers: ZipAlertTriggers) {
+        val next = ZipAlertCodec.decode(sp(context).getString(KEY_ALERTS_JSON, null)).toMutableMap()
+        next[zip] = triggers
+        sp(context).edit().putString(KEY_ALERTS_JSON, ZipAlertCodec.encode(next)).apply()
+    }
+
+    fun ensureAlertTriggers(context: Context, zip: String): ZipAlertTriggers {
+        alertTriggers(context, zip)?.let { return it }
+        val defaults = ZipAlertTriggers(precipEnabled = true)
+        setAlertTriggers(context, zip, defaults)
+        return defaults
+    }
+
+    fun removeAlertTriggers(context: Context, zip: String) {
+        val current = ZipAlertCodec.decode(sp(context).getString(KEY_ALERTS_JSON, null))
+        if (zip !in current) return
+        val next = current - zip
+        val e = sp(context).edit()
+        if (next.isEmpty()) e.remove(KEY_ALERTS_JSON) else e.putString(KEY_ALERTS_JSON, ZipAlertCodec.encode(next))
+        e.apply()
+    }
+
+    fun alertDedupeKeys(context: Context): Set<String> =
+        sp(context).getStringSet(KEY_ALERT_DEDUPE, null)?.toSet() ?: emptySet()
+
+    fun addAlertDedupeKeys(context: Context, keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        val next = AlertEvaluator.rememberKeys(alertDedupeKeys(context), keys)
+        sp(context).edit().putStringSet(KEY_ALERT_DEDUPE, next).apply()
     }
 }

@@ -22,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,8 +43,19 @@ import com.xx.weather.data.model.Place
 import com.xx.weather.data.model.Units
 import com.xx.weather.ui.theme.LocalWeatherPalette
 
+data class AlertSettingsUi(
+    val enabled: Boolean,
+    val denied: Boolean,
+    val zipLabel: String?,
+    val precipEnabled: Boolean,
+    val precipHours: Int,
+    val tempEnabled: Boolean,
+    val tempAtOrBelowF: Int,
+)
+
 /**
- * Units + add a ZIP. Saved locations can be removed here or from the list view.
+ * Units + add a ZIP + optional weather alerts. Saved locations can be removed
+ * here or from the list view. Alert changes persist immediately.
  */
 @Composable
 fun SettingsDialog(
@@ -51,10 +63,16 @@ fun SettingsDialog(
     currentUnits: Units,
     applying: Boolean,
     error: String?,
+    alerts: AlertSettingsUi,
     onDismiss: () -> Unit,
     onAdd: (zip: String, units: Units) -> Unit,
     onUnitsOnly: (units: Units) -> Unit,
-    onRemove: (zip: String) -> Unit
+    onRemove: (zip: String) -> Unit,
+    onAlertsEnabledChange: (Boolean) -> Unit,
+    onPrecipEnabledChange: (Boolean) -> Unit,
+    onPrecipHoursChange: (Int) -> Unit,
+    onTempEnabledChange: (Boolean) -> Unit,
+    onTempThresholdChange: (Int) -> Unit,
 ) {
     var zip by remember { mutableStateOf("") }
     var units by remember { mutableStateOf(currentUnits) }
@@ -68,7 +86,7 @@ fun SettingsDialog(
             Column(
                 Modifier
                     .padding(24.dp)
-                    .heightIn(max = 520.dp)
+                    .heightIn(max = 640.dp)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text("Settings", color = palette.onBackground, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -156,6 +174,111 @@ fun SettingsDialog(
                         label = { Text("°C") },
                         enabled = !applying
                     )
+                }
+
+                Spacer(Modifier.height(18.dp))
+                Text(
+                    "WEATHER ALERTS",
+                    color = palette.muted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.2.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Enable alerts",
+                        color = palette.onBackground,
+                        fontSize = 15.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = alerts.enabled,
+                        onCheckedChange = onAlertsEnabledChange,
+                        enabled = !applying
+                    )
+                }
+                Text(
+                    text = when {
+                        alerts.denied ->
+                            "Notification permission denied. Alerts stay off. Forecasts still work."
+                        alerts.enabled && alerts.zipLabel != null ->
+                            "Watching ${alerts.zipLabel}. Same 15-minute refresh — no extra polling."
+                        alerts.enabled ->
+                            "Save a ZIP to attach rain and freeze triggers. Forecasts still work."
+                        else ->
+                            "Optional. Forecasts work if you leave this off or deny notification permission."
+                    },
+                    color = palette.faint,
+                    fontSize = 12.sp
+                )
+                if (alerts.enabled) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Rain in the next N hours", color = palette.onBackground, fontSize = 15.sp)
+                            Text("PoP 50%+ or falling precip", color = palette.faint, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = alerts.precipEnabled,
+                            onCheckedChange = onPrecipEnabledChange,
+                            enabled = !applying
+                        )
+                    }
+                    if (alerts.precipEnabled) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(3, 6, 12).forEach { hours ->
+                                FilterChip(
+                                    selected = alerts.precipHours == hours,
+                                    onClick = { onPrecipHoursChange(hours) },
+                                    label = { Text("${hours}h") },
+                                    enabled = !applying
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Temperature at or below", color = palette.onBackground, fontSize = 15.sp)
+                            Text("Threshold is °F", color = palette.faint, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = alerts.tempEnabled,
+                            onCheckedChange = onTempEnabledChange,
+                            enabled = !applying
+                        )
+                    }
+                    if (alerts.tempEnabled) {
+                        Spacer(Modifier.height(6.dp))
+                        var tempInput by remember(alerts.tempAtOrBelowF) {
+                            mutableStateOf(alerts.tempAtOrBelowF.toString())
+                        }
+                        OutlinedTextField(
+                            value = tempInput,
+                            onValueChange = { value ->
+                                if (value.length <= 4 && value.all { it == '-' || it.isDigit() }) {
+                                    tempInput = value
+                                    value.toIntOrNull()?.let { onTempThresholdChange(it.coerceIn(-80, 140)) }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            enabled = !applying,
+                            suffix = { Text("°F", color = palette.faint) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(22.dp))

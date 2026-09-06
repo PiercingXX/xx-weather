@@ -1,16 +1,16 @@
 # XX-Weather — Remaining work
 
-**2026-09-04.** Forecast pipeline + widgets + WorkManager 15-min refresh
-are code (`versionName` 1.2.0). Remaining work is **alerts + device QA**.
+**2026-09-05.** Forecast pipeline + widgets + WorkManager 15-min refresh +
+optional alerts are code (`versionName` 1.2.0). Remaining work is **device QA**.
 Old “code phases” stay in git; do not re-litigate freshness/units.
 
 Package: `com.xx.weather`  
 US ZIP weather. NWS primary, Open-Meteo fallback. No location. No GMS.
-`INTERNET` required.
+`INTERNET` required for forecasts. `POST_NOTIFICATIONS` optional (alerts).
 
 ```
-Status: app + widgets exist. POST_NOTIFICATIONS is declared and unused.
-Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
+Status: app + widgets + alerts exist. 15-min WorkManager evaluates alerts on
+that pass. Manual QA unchecked.
 ```
 
 ## Code P0s (2026-09-05)
@@ -40,18 +40,18 @@ Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
 
 ## W1 — Alerts
 
-- [ ] Runtime `POST_NOTIFICATIONS` on first alert enable (API 33+). Deny
+- [x] Runtime `POST_NOTIFICATIONS` on first alert enable (API 33+). Deny
   → alerts stay off, forecast still works. Honest copy.
-- [ ] Per-ZIP (or current ZIP) user-defined triggers. v1 minimum:
+- [x] Per-ZIP (or current ZIP) user-defined triggers. v1 minimum:
   **precip in the next N hours** and **temperature cross** (at/below a
   threshold). No spam: one notification per trigger per fetch window.
-- [ ] WorkManager already refreshes every 15 min — evaluate alerts off
+- [x] WorkManager already refreshes every 15 min — evaluate alerts off
   that pass, not a second poller.
-- [ ] Tap opens the app on that ZIP. GrapheneOS Network revoke → no
+- [x] Tap opens the app on that ZIP. GrapheneOS Network revoke → no
   crash, no fake “updated just now.”
-- [ ] README stops saying INTERNET-only; list notifications as optional.
+- [x] README stops saying INTERNET-only; list notifications as optional.
 - **Accept:** enable precip alert, wait for a real/forced fetch that
-  meets the rule, see one notification. Disable → silence.
+  meets the rule, see one notification. Disable → silence. *(device QA)*
 
 ---
 
@@ -60,13 +60,13 @@ Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
 Not a third forecast app. A small widget (2×1 or lock-screen) that
 reads the cache the 4×2 already uses.
 
-- [ ] Show current **feels-like** and **wind** (speed + unit already in
+- [x] Show current **feels-like** and **wind** (speed + unit already in
   the model). ZIP label. Tap opens the app on that ZIP.
-- [ ] Same freshness / airplane rules as the other widgets — last-good
+- [x] Same freshness / airplane rules as the other widgets — last-good
   data, never a lying clock.
-- [ ] No new network poller. No location.
+- [x] No new network poller. No location.
 - **Accept:** add the glance next to the 2×2; after a fetch it matches
-  the hero extras. Airplane overnight still shows last-good.
+  the hero extras. Airplane overnight still shows last-good. *(device QA)*
 
 ---
 
@@ -94,7 +94,7 @@ reads the cache the 4×2 already uses.
 
 ## Docs
 
-- [ ] TODO / WORKFLOW_STATE / README: version 1.2.0, 15-min WorkManager,
+- [x] TODO / WORKFLOW_STATE / README: version 1.2.0, 15-min WorkManager,
   alerts. WORKFLOW_STATE must not claim “WorkManager not added.”
 
 ---

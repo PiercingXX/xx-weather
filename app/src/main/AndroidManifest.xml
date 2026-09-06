@@ -3,9 +3,9 @@
 
     <!-- GrapheneOS-friendly: no location, no GMS. Manual ZIP code entry only. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- POST_NOTIFICATIONS (API 33+): declared so runtime notification
-         permission can be requested at runtime; no GMS, no location
-         permission is used. Exactly one declaration must remain. -->
+    <!-- POST_NOTIFICATIONS (API 33+): optional weather alerts. Requested at
+         runtime on first enable; deny leaves alerts off. Forecasts still
+         work. No GMS, no location. Exactly one declaration must remain. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Family theme-sync. Do NOT <permission>-declare THEME_SYNC: this app
