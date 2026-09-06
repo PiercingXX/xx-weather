@@ -13,7 +13,9 @@ import com.xx.weather.data.WeatherRepository
 import com.xx.weather.data.model.WeatherData
 import com.xx.weather.theme.FOREGROUND_INK
 import com.xx.weather.theme.FOREGROUND_WHITE
+import com.xx.weather.theme.SyncedTheme
 import com.xx.weather.theme.ThemeController
+import com.xx.weather.theme.withAlpha
 import com.xx.weather.ui.Fmt
 import com.xx.weather.ui.components.ConditionIcon
 import kotlinx.coroutines.CoroutineScope
@@ -152,11 +154,11 @@ object WidgetUpdater {
     }
 
     private fun paintTheme(rv: android.widget.RemoteViews, context: Context, kind: WidgetKind) {
-        val theme = ThemeController.current(context)
-        val bg = theme.background.toInt()
-        val fg = (if (theme.isDark) FOREGROUND_WHITE else FOREGROUND_INK).toInt()
-        val muted = (fg and 0x00FFFFFF) or (0xB3 shl 24)
-        val faint = (fg and 0x00FFFFFF) or (0x80 shl 24)
+        val paint = widgetPaint(ThemeController.current(context))
+        val bg = paint.background
+        val fg = paint.foreground
+        val muted = paint.muted
+        val faint = paint.faint
         rv.setInt(R.id.widget_root, "setBackgroundColor", bg)
         rv.setTextColor(R.id.widget_temp, fg)
         rv.setTextColor(R.id.widget_cond, muted)
@@ -176,6 +178,7 @@ object WidgetUpdater {
             for (i in 0 until 6) {
                 rv.setTextColor(HOUR_TIME_IDS[i], muted)
                 rv.setTextColor(HOUR_TEMP_IDS[i], fg)
+                rv.setTextColor(HOUR_POP_IDS[i], paint.pop)
                 rv.setInt(HOUR_ICON_IDS[i], "setColorFilter", fg)
             }
         }
@@ -221,6 +224,26 @@ object WidgetUpdater {
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+}
+
+/** Synced-theme colors for RemoteViews. PoP uses [muted], same as hour time. */
+internal data class WidgetPaint(
+    val background: Int,
+    val foreground: Int,
+    val muted: Int,
+    val faint: Int,
+) {
+    val pop: Int get() = muted
+}
+
+internal fun widgetPaint(theme: SyncedTheme): WidgetPaint {
+    val fg = if (theme.isDark) FOREGROUND_WHITE else FOREGROUND_INK
+    return WidgetPaint(
+        background = theme.background.toInt(),
+        foreground = fg.toInt(),
+        muted = withAlpha(fg, 0xB3).toInt(),
+        faint = withAlpha(fg, 0x80).toInt(),
+    )
 }
 
 abstract class BaseWeatherWidget : AppWidgetProvider() {

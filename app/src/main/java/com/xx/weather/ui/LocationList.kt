@@ -35,11 +35,12 @@ import com.xx.weather.ui.theme.LocalWeatherPalette
 @Composable
 fun LocationList(
     places: List<Place>,
-    dataByZip: Map<String, WeatherData>,
+    dataByZip: Map<String, WeatherData?>,
     units: Units,
     onSelect: (Place) -> Unit,
     onRemove: (Place) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    errors: Map<String, String> = emptyMap(),
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -50,6 +51,8 @@ fun LocationList(
             LocationRow(
                 place = place,
                 data = dataByZip[place.zip],
+                failed = errors.containsKey(place.zip) ||
+                    (place.zip in dataByZip && dataByZip[place.zip] == null),
                 units = units,
                 onSelect = { onSelect(place) },
                 onRemove = { onRemove(place) }
@@ -62,6 +65,7 @@ fun LocationList(
 private fun LocationRow(
     place: Place,
     data: WeatherData?,
+    failed: Boolean,
     units: Units,
     onSelect: () -> Unit,
     onRemove: () -> Unit
@@ -101,7 +105,8 @@ private fun LocationRow(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = data?.current?.conditionText ?: "Loading…",
+                    text = data?.current?.conditionText
+                        ?: if (failed) "Couldn't load" else "Loading…",
                     color = palette.muted,
                     fontSize = 13.sp
                 )

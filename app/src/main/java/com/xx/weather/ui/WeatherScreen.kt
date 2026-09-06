@@ -43,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -75,7 +74,7 @@ fun WeatherScreen(
     var places by remember { mutableStateOf(Prefs.places(context)) }
     var selectedZip by remember { mutableStateOf(Prefs.selectedZip(context)) }
     var collapsed by remember { mutableStateOf(Prefs.collapsed(context)) }
-    var dataByZip by remember { mutableStateOf<Map<String, WeatherData>>(emptyMap()) }
+    var dataByZip by remember { mutableStateOf<Map<String, WeatherData?>>(emptyMap()) }
     var errors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
     var refreshing by remember { mutableStateOf(false) }
@@ -93,18 +92,13 @@ fun WeatherScreen(
     )
 
     fun applyResult(zip: String, result: WeatherRepository.RefreshResult) {
-        when (result) {
-            is WeatherRepository.RefreshResult.Success -> {
-                dataByZip = dataByZip + (zip to result.data)
-                errors = errors - zip
-                if (zip == Prefs.selectedZip(context)) {
-                    WidgetUpdater.updateAll(context, result.data)
-                }
-            }
-            is WeatherRepository.RefreshResult.Failure -> {
-                errors = errors + (zip to result.message)
-                if (result.stale != null) dataByZip = dataByZip + (zip to result.stale)
-            }
+        val next = applyRefreshResult(ZipRefreshState(dataByZip, errors), zip, result)
+        dataByZip = next.dataByZip
+        errors = next.errors
+        if (result is WeatherRepository.RefreshResult.Success &&
+            zip == Prefs.selectedZip(context)
+        ) {
+            WidgetUpdater.updateAll(context, result.data)
         }
         loading = false
     }
@@ -136,6 +130,7 @@ fun WeatherScreen(
     }
 
     LaunchedEffect(startTick) {
+        if (!shouldRefreshOnStartTick(startTick)) return@LaunchedEffect
         val list = Prefs.places(context)
         places = list
         selectedZip = Prefs.selectedZip(context)
@@ -303,6 +298,7 @@ fun WeatherScreen(
                 collapsed -> LocationList(
                     places = places,
                     dataByZip = dataByZip,
+                    errors = errors,
                     units = units,
                     onSelect = { place ->
                         selectedZip = place.zip
@@ -343,6 +339,8 @@ fun WeatherScreen(
                             units,
                             onDayClick = { selectedDay = it },
                         )
+                        place != null && !zipShowsSpinner(place.zip, dataByZip, errors) ->
+                            ForecastUnavailable()
                         place != null -> Box(
                             Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -516,24 +514,25 @@ private fun HeroSection(
                 .fillMaxSize()
                 .background(palette.background.copy(alpha = 0.28f))
         )
+        val heroFg = palette.onBackground
         Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
             Text(
                 text = Fmt.fullDate(todayDate),
-                color = Color.White,
+                color = heroFg,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { onDateClick(todayDate) }
             )
             Text(
                 text = c.conditionText,
-                color = Color.White.copy(alpha = 0.92f),
+                color = heroFg.copy(alpha = 0.92f),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
             Row(verticalAlignment = Alignment.Top) {
                 Text(
                     text = Fmt.temp(c.tempF, units),
-                    color = Color.White,
+                    color = heroFg,
                     fontSize = 72.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-2).sp,
@@ -546,13 +545,13 @@ private fun HeroSection(
                     Modifier
                         .size(36.dp)
                         .padding(top = 14.dp),
-                    tint = Color.White
+                    tint = heroFg
                 )
             }
             if (today != null) {
                 Text(
                     text = Fmt.hilo(today.hiF, today.loF, units),
-                    color = Color.White.copy(alpha = 0.92f),
+                    color = heroFg.copy(alpha = 0.92f),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -560,11 +559,26 @@ private fun HeroSection(
             c.feelsLikeF?.let {
                 Text(
                     text = "Feels like ${Fmt.temp(it, units)}",
-                    color = Color.White.copy(alpha = 0.78f),
+                    color = heroFg.copy(alpha = 0.78f),
                     fontSize = 13.sp
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ForecastUnavailable() {
+    val palette = LocalWeatherPalette.current
+    Box(
+        Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Couldn't load this forecast.",
+            color = palette.onBackground.copy(alpha = 0.75f),
+            fontSize = 15.sp
+        )
     }
 }
 

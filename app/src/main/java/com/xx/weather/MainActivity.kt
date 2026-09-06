@@ -15,7 +15,11 @@ import com.xx.weather.ui.theme.XXWeatherTheme
 
 class MainActivity : ComponentActivity() {
 
-    /** Bumps on every ON_START so WeatherScreen re-runs its stale-check refresh. */
+    /**
+     * Starts at 0 so the first `setContent` composition does not fetch.
+     * `onStart` is the first increment; WeatherScreen refreshes only when
+     * the tick is greater than 0 (and again on later resumes).
+     */
     private val startTick = mutableStateOf(0L)
 
     override fun onStart() {

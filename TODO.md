@@ -13,6 +13,18 @@ Status: app + widgets exist. POST_NOTIFICATIONS is declared and unused.
 Manual QA unchecked. Docs still talk like 1.0.1 / no WorkManager.
 ```
 
+## Code P0s (2026-09-05)
+
+- [x] Failed refresh of a new ZIP with no cache no longer spins forever
+  (`applyRefreshResult` inserts a null placeholder; pager shows
+  "Couldn't load" instead of `CircularProgressIndicator`)
+- [x] Hero temp / date / condition use `palette.onBackground` (ink on
+  Paper/Mist, white when `theme.isDark`)
+- [x] Wide widget hourly PoP is painted with muted/faint from the synced
+  theme (same as hour time)
+- [x] Cold start does not double-fetch (`startTick == 0` skipped; `onStart`
+  is the first fetch). 15-minute loop kept.
+
 ---
 
 ## Locked now (2026-09-04)
