@@ -32,13 +32,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import android.app.Activity
 import com.xx.weather.R
+import com.xx.weather.log.LogsUi
 import com.xx.weather.data.model.Place
 import com.xx.weather.data.model.Units
 import com.xx.weather.ui.theme.LocalWeatherPalette
@@ -78,6 +81,7 @@ fun SettingsDialog(
     var units by remember { mutableStateOf(currentUnits) }
 
     val palette = LocalWeatherPalette.current
+    val context = LocalContext.current
     Dialog(onDismissRequest = { if (!applying) onDismiss() }) {
         Surface(
             shape = RoundedCornerShape(28.dp),
@@ -282,6 +286,10 @@ fun SettingsDialog(
                 }
 
                 Spacer(Modifier.height(22.dp))
+                TextButton(onClick = { (context as? Activity)?.let { LogsUi.show(it) } }) {
+                    Text("Logs", color = palette.muted)
+                }
+                Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
